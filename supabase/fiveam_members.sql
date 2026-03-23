@@ -8,9 +8,9 @@ create table if not exists public.fiveam_members (
   city text,
   email text,
   avatar_url text not null,
-  wake_time text not null,
-  wake_timestamp timestamptz not null,
-  best_time text not null,
+  wake_time text,
+  wake_timestamp timestamptz,
+  best_time text,
   streak integer not null default 0,
   daily_records jsonb not null default '[]'::jsonb,
   access_token text not null,
@@ -23,3 +23,11 @@ create table if not exists public.fiveam_members (
 
 create index if not exists fiveam_members_updated_at_idx
   on public.fiveam_members (updated_at desc);
+
+create unique index if not exists fiveam_members_twitter_handle_unique_idx
+  on public.fiveam_members (lower(twitter_handle));
+
+alter table public.fiveam_members
+  alter column wake_time drop not null,
+  alter column wake_timestamp drop not null,
+  alter column best_time drop not null;

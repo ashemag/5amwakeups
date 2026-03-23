@@ -10,3 +10,13 @@ export function createSupabaseAdminClient() {
     },
   });
 }
+
+export function createSupabaseServerAuthClient() {
+  return createClient(env.supabaseUrl, env.supabasePublishableKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+    },
+  });
+}

@@ -1,7 +1,8 @@
 import { createSupabaseAdminClient } from "@/lib/supabase";
 import { getWakeStatus, type Member } from "@/lib/wake-data";
+import { getHighQualityXAvatarUrl } from "@/lib/x-avatar";
 
-type DailyRecord = {
+export type DailyRecord = {
   date: string;
   wakeTime: string;
   wakeTimestamp: string;
@@ -10,7 +11,7 @@ type DailyRecord = {
 type MemberRow = {
   access_token: string;
   avatar_url: string;
-  best_time: string;
+  best_time: string | null;
   city: string | null;
   created_at: string;
   daily_records: DailyRecord[] | null;
@@ -24,12 +25,14 @@ type MemberRow = {
   token_expires_at: string | null;
   twitter_handle: string;
   updated_at: string;
-  wake_time: string;
-  wake_timestamp: string;
+  wake_time: string | null;
+  wake_timestamp: string | null;
 };
 
-type UpsertMemberInput = {
+export type UpsertMemberInput = {
   accessToken: string;
+  avatarUrl?: string | null;
+  dailyRecords: DailyRecord[];
   displayName: string;
   email?: string | null;
   ouraUserId: string;
@@ -37,10 +40,11 @@ type UpsertMemberInput = {
   scopes: string[];
   tokenExpiresAt: string;
   twitterHandle: string;
-  wakeDate: string;
-  wakeTime: string;
-  wakeTimestamp: string;
 };
+
+function normalizeHandle(handle: string) {
+  return handle.trim().replace(/^@/, "").toLowerCase();
+}
 
 function toDayStart(date: string) {
   return new Date(`${date}T00:00:00Z`);
@@ -50,9 +54,47 @@ function sortRecords(records: DailyRecord[]) {
   return [...records].sort((left, right) => right.date.localeCompare(left.date));
 }
 
-function mergeDailyRecords(records: DailyRecord[], nextRecord: DailyRecord) {
-  const deduped = records.filter((record) => record.date !== nextRecord.date);
-  return sortRecords([nextRecord, ...deduped]).slice(0, 7);
+function getDailyRecordCount(records: DailyRecord[] | null | undefined) {
+  return records?.length ?? 0;
+}
+
+function compareMemberRows(left: MemberRow, right: MemberRow) {
+  const leftHasWakeData = Number(Boolean(left.wake_time && left.best_time));
+  const rightHasWakeData = Number(Boolean(right.wake_time && right.best_time));
+
+  if (leftHasWakeData !== rightHasWakeData) {
+    return rightHasWakeData - leftHasWakeData;
+  }
+
+  const dailyRecordDelta =
+    getDailyRecordCount(right.daily_records) - getDailyRecordCount(left.daily_records);
+
+  if (dailyRecordDelta !== 0) {
+    return dailyRecordDelta;
+  }
+
+  const updatedAtDelta =
+    new Date(right.updated_at).getTime() - new Date(left.updated_at).getTime();
+
+  if (updatedAtDelta !== 0) {
+    return updatedAtDelta;
+  }
+
+  return new Date(right.created_at).getTime() - new Date(left.created_at).getTime();
+}
+
+function pickCanonicalRow(rows: MemberRow[]) {
+  return [...rows].sort(compareMemberRows)[0] ?? null;
+}
+
+function mergeDailyRecords(records: DailyRecord[], nextRecords: DailyRecord[]) {
+  const byDate = new Map<string, DailyRecord>();
+
+  for (const record of [...records, ...nextRecords]) {
+    byDate.set(record.date, record);
+  }
+
+  return sortRecords([...byDate.values()]).slice(0, 30);
 }
 
 function calculateStreak(records: DailyRecord[]) {
@@ -83,7 +125,7 @@ function calculateStreak(records: DailyRecord[]) {
 
 function calculateBestTime(records: DailyRecord[]) {
   if (records.length === 0) {
-    return "05:00";
+    return null;
   }
 
   return [...records]
@@ -91,7 +133,15 @@ function calculateBestTime(records: DailyRecord[]) {
     .wakeTime;
 }
 
+function getLatestRecord(records: DailyRecord[]) {
+  return sortRecords(records)[0] ?? null;
+}
+
 function mapRowToMember(row: MemberRow): Member {
+  if (!row.wake_time || !row.best_time) {
+    throw new Error("Tried to map a member without wake data.");
+  }
+
   const weeklyTimes =
     row.daily_records
       ?.map((record) => record.wakeTime)
@@ -106,7 +156,10 @@ function mapRowToMember(row: MemberRow): Member {
     streak: row.streak,
     wakeTime: row.wake_time,
     bestTime: row.best_time,
-    avatarUrl: row.avatar_url,
+    avatarUrl: getHighQualityXAvatarUrl({
+      avatarUrl: row.avatar_url,
+      username: row.twitter_handle,
+    }),
     ouraConnected: true,
     weeklyTimes: weeklyTimes.length ? weeklyTimes : [row.wake_time],
   };
@@ -117,6 +170,7 @@ export async function listStoredMembers() {
   const { data, error } = await supabase
     .from("fiveam_members")
     .select("*")
+    .not("wake_time", "is", null)
     .order("updated_at", { ascending: false });
 
   if (error) {
@@ -127,32 +181,97 @@ export async function listStoredMembers() {
     throw error;
   }
 
-  return ((data ?? []) as MemberRow[]).map(mapRowToMember);
+  const rows = (data ?? []) as MemberRow[];
+  const dedupedRows = new Map<string, MemberRow>();
+
+  for (const row of [...rows].sort(compareMemberRows)) {
+    const handle = normalizeHandle(row.twitter_handle);
+    if (!handle || dedupedRows.has(handle)) {
+      continue;
+    }
+    dedupedRows.set(handle, row);
+  }
+
+  return [...dedupedRows.values()].map(mapRowToMember);
+}
+
+export async function getStoredMemberStatus(handle: string) {
+  const normalizedHandle = normalizeHandle(handle);
+
+  if (!normalizedHandle) {
+    return {
+      connected: false,
+      hasSleepData: false,
+      member: null,
+    };
+  }
+
+  const supabase = createSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("fiveam_members")
+    .select("*")
+    .eq("twitter_handle", normalizedHandle)
+    .order("updated_at", { ascending: false });
+
+  if (error) {
+    if (error.code === "PGRST205" || error.message.includes("does not exist")) {
+      return {
+        connected: false,
+        hasSleepData: false,
+        member: null,
+      };
+    }
+
+    throw error;
+  }
+
+  const row = pickCanonicalRow((data ?? []) as MemberRow[]);
+
+  if (!row) {
+    return {
+      connected: false,
+      hasSleepData: false,
+      member: null,
+    };
+  }
+
+  const hasSleepData = Boolean(row.wake_time && row.best_time);
+
+  return {
+    connected: true,
+    hasSleepData,
+    member: hasSleepData ? mapRowToMember(row) : null,
+  };
 }
 
 export async function upsertStoredMember(input: UpsertMemberInput) {
   const supabase = createSupabaseAdminClient();
+  const normalizedHandle = normalizeHandle(input.twitterHandle);
   const { data: existing, error: existingError } = await supabase
     .from("fiveam_members")
     .select("*")
-    .eq("oura_user_id", input.ouraUserId)
-    .maybeSingle();
+    .or(`oura_user_id.eq.${input.ouraUserId},twitter_handle.eq.${normalizedHandle}`)
+    .order("updated_at", { ascending: false });
 
-  if (existingError && existingError.code !== "PGRST116") {
+  if (existingError) {
     throw existingError;
   }
 
-  const existingRow = (existing as MemberRow | null) ?? null;
-  const mergedRecords = mergeDailyRecords(existingRow?.daily_records ?? [], {
-    date: input.wakeDate,
-    wakeTime: input.wakeTime,
-    wakeTimestamp: input.wakeTimestamp,
-  });
+  const existingRows = (existing ?? []) as MemberRow[];
+  const existingRow = pickCanonicalRow(existingRows);
+  const mergedRecords = mergeDailyRecords(
+    existingRows.flatMap((row) => row.daily_records ?? []),
+    input.dailyRecords,
+  );
+  const latestRecord = getLatestRecord(mergedRecords);
+  const bestTime = calculateBestTime(mergedRecords) ?? existingRow?.best_time ?? null;
 
   const payload = {
     access_token: input.accessToken,
-    avatar_url: `https://unavatar.io/x/${input.twitterHandle}`,
-    best_time: calculateBestTime(mergedRecords),
+    avatar_url: getHighQualityXAvatarUrl({
+      avatarUrl: input.avatarUrl,
+      username: input.twitterHandle,
+    }),
     city: existingRow?.city ?? null,
     daily_records: mergedRecords,
     display_name: input.displayName,
@@ -162,17 +281,43 @@ export async function upsertStoredMember(input: UpsertMemberInput) {
     scopes: input.scopes,
     streak: calculateStreak(mergedRecords),
     token_expires_at: input.tokenExpiresAt,
-    twitter_handle: input.twitterHandle,
+    twitter_handle: normalizedHandle,
     updated_at: new Date().toISOString(),
-    wake_time: input.wakeTime,
-    wake_timestamp: input.wakeTimestamp,
+    wake_time: latestRecord?.wakeTime ?? existingRow?.wake_time ?? null,
+    wake_timestamp:
+      latestRecord?.wakeTimestamp ?? existingRow?.wake_timestamp ?? null,
+    best_time: bestTime,
   };
 
-  const { error } = await supabase
-    .from("fiveam_members")
-    .upsert(payload, { onConflict: "oura_user_id" });
+  let error = null;
+
+  if (existingRow) {
+    const updateResult = await supabase
+      .from("fiveam_members")
+      .update(payload)
+      .eq("id", existingRow.id);
+    error = updateResult.error;
+  } else {
+    const insertResult = await supabase.from("fiveam_members").insert(payload);
+    error = insertResult.error;
+  }
 
   if (error) {
     throw error;
+  }
+
+  const duplicateIds = existingRows
+    .map((row) => row.id)
+    .filter((id) => id !== existingRow?.id);
+
+  if (duplicateIds.length > 0) {
+    const { error: duplicateDeleteError } = await supabase
+      .from("fiveam_members")
+      .delete()
+      .in("id", duplicateIds);
+
+    if (duplicateDeleteError) {
+      throw duplicateDeleteError;
+    }
   }
 }

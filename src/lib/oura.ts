@@ -17,7 +17,7 @@ type OuraPersonalInfo = {
   weight?: number | null;
 };
 
-type OuraDailySleepResponse = {
+type OuraSleepResponse = {
   data: Array<{
     bedtime_end?: string | null;
     bedtime_start?: string | null;
@@ -37,13 +37,40 @@ type WakeSnapshot = {
 const OURA_AUTHORIZE_URL = "https://cloud.ouraring.com/oauth/authorize";
 const OURA_TOKEN_URL = "https://api.ouraring.com/oauth/token";
 const OURA_PERSONAL_INFO_URL = "https://api.ouraring.com/v2/usercollection/personal_info";
-const OURA_DAILY_SLEEP_URL = "https://api.ouraring.com/v2/usercollection/daily_sleep";
+const OURA_SLEEP_URL = "https://api.ouraring.com/v2/usercollection/sleep";
 const OURA_SCOPES = ["personal", "daily", "email"];
+
+function formatOuraErrorMessage(response: Response, detail: string) {
+  const trimmedDetail = detail.trim();
+
+  if (!trimmedDetail) {
+    return `Oura request failed with ${response.status}`;
+  }
+
+  try {
+    const parsed = JSON.parse(trimmedDetail) as {
+      detail?: string;
+      error?: string;
+      error_description?: string;
+      title?: string;
+    };
+
+    return (
+      parsed.error_description ||
+      parsed.detail ||
+      parsed.title ||
+      parsed.error ||
+      trimmedDetail
+    );
+  } catch {
+    return trimmedDetail;
+  }
+}
 
 async function parseJson<T>(response: Response): Promise<T> {
   if (!response.ok) {
-    const message = await response.text();
-    throw new Error(message || `Oura request failed with ${response.status}`);
+    const detail = await response.text();
+    throw new Error(formatOuraErrorMessage(response, detail));
   }
 
   return (await response.json()) as T;
@@ -107,11 +134,27 @@ export async function fetchOuraPersonalInfo(accessToken: string) {
 }
 
 export async function fetchLatestWakeSnapshot(accessToken: string): Promise<WakeSnapshot> {
+  const snapshots = await fetchRecentWakeSnapshots(accessToken, 30);
+  const latestSleep = snapshots[0];
+
+  if (!latestSleep) {
+    throw new Error(
+      "Oura did not return recent sleep data yet. Daily sleep usually lands later in the morning.",
+    );
+  }
+
+  return latestSleep;
+}
+
+export async function fetchRecentWakeSnapshots(
+  accessToken: string,
+  daysBack = 30,
+): Promise<WakeSnapshot[]> {
   const end = new Date();
   const start = new Date(end);
-  start.setDate(end.getDate() - 1);
+  start.setDate(end.getDate() - daysBack);
 
-  const url = new URL(OURA_DAILY_SLEEP_URL);
+  const url = new URL(OURA_SLEEP_URL);
   url.searchParams.set("start_date", formatDate(start));
   url.searchParams.set("end_date", formatDate(end));
 
@@ -122,22 +165,15 @@ export async function fetchLatestWakeSnapshot(accessToken: string): Promise<Wake
     cache: "no-store",
   });
 
-  const payload = await parseJson<OuraDailySleepResponse>(response);
-  const latestSleep = [...payload.data]
+  const payload = await parseJson<OuraSleepResponse>(response);
+  return [...payload.data]
     .filter((item) => item.bedtime_end)
     .sort((left, right) =>
       String(right.bedtime_end).localeCompare(String(left.bedtime_end)),
-    )[0];
-
-  if (!latestSleep?.bedtime_end) {
-    throw new Error(
-      "Oura did not return recent sleep data yet. Daily sleep usually lands later in the morning.",
-    );
-  }
-
-  return {
-    wakeDate: latestSleep.day,
-    wakeTime: extractClockTime(latestSleep.bedtime_end),
-    wakeTimestamp: latestSleep.bedtime_end,
-  };
+    )
+    .map((sleep) => ({
+      wakeDate: sleep.day,
+      wakeTime: extractClockTime(String(sleep.bedtime_end)),
+      wakeTimestamp: String(sleep.bedtime_end),
+    }));
 }
