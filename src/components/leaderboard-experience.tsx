@@ -103,9 +103,101 @@ export function JoinForm() {
   );
 }
 
+function WeekDots({
+  member,
+  expanded,
+}: {
+  member: Member;
+  expanded: boolean;
+}) {
+  const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+  return (
+    <>
+      {/* Desktop: hover tooltips */}
+      <div className="hidden items-center gap-px sm:flex">
+        {member.weeklyTimes.map((time, i) => {
+          const background = getHistoryDotColor(time);
+          return (
+            <span
+              key={`${member.id}-${i}`}
+              className="group relative block"
+            >
+              <span
+                className="pointer-events-none absolute bottom-full left-1/2 mb-2 -translate-x-1/2 rounded-md border border-border bg-white px-2 py-1 text-[11px] font-medium whitespace-nowrap text-foreground opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100 dark:bg-white"
+              >
+                {formatWakeTime(time)}
+              </span>
+              <span
+                className="block size-1.5 rounded-full"
+                style={{ background }}
+              />
+            </span>
+          );
+        })}
+        {Array.from({
+          length: Math.max(0, 7 - member.weeklyTimes.length),
+        }).map((_, i) => (
+          <span
+            key={`${member.id}-empty-${i}`}
+            className="group relative block"
+          >
+            <span
+              className="pointer-events-none absolute bottom-full left-1/2 mb-2 -translate-x-1/2 rounded-md border border-border bg-white px-2 py-1 text-[11px] font-medium whitespace-nowrap text-foreground opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100 dark:bg-white"
+            >
+              No data
+            </span>
+            <span
+              className="block size-1.5 rounded-full bg-muted-foreground/35"
+            />
+          </span>
+        ))}
+      </div>
+
+      {/* Mobile: inline dots */}
+      <div className="flex items-center gap-px sm:hidden">
+        {member.weeklyTimes.map((time, i) => (
+          <span
+            key={`${member.id}-m-${i}`}
+            className="block size-1.5 rounded-full"
+            style={{ background: getHistoryDotColor(time) }}
+          />
+        ))}
+        {Array.from({
+          length: Math.max(0, 7 - member.weeklyTimes.length),
+        }).map((_, i) => (
+          <span
+            key={`${member.id}-m-empty-${i}`}
+            className="block size-1.5 rounded-full bg-muted-foreground/35"
+          />
+        ))}
+      </div>
+
+      {/* Mobile: expanded time list */}
+      {expanded && (
+        <div className="col-span-full mt-1 ml-7 flex flex-wrap gap-x-3 gap-y-1 pb-1 sm:hidden">
+          {member.weeklyTimes.map((time, i) => (
+            <span
+              key={`${member.id}-detail-${i}`}
+              className="flex items-center gap-1.5 text-[11px] tabular-nums text-muted-foreground"
+            >
+              <span
+                className="inline-block size-1.5 rounded-full"
+                style={{ background: getHistoryDotColor(time) }}
+              />
+              {days[i % 7]} {formatWakeTime(time)}
+            </span>
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
+
 function BoardContent() {
   const [realMembers, setRealMembers] = useState<Member[]>([]);
   const [hasLoadedBoard, setHasLoadedBoard] = useState(false);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -172,104 +264,78 @@ function BoardContent() {
       ) : (
         <div className="mt-6 divide-y divide-border">
           {realMembers.map((member, index) => {
+            const isExpanded = expandedId === member.id;
+
             return (
               <div
                 key={member.id}
-                className="flex items-start gap-2.5 py-3 sm:items-center sm:gap-4"
+                className="cursor-pointer py-3 sm:cursor-default"
+                onClick={() =>
+                  setExpandedId(isExpanded ? null : member.id)
+                }
               >
-                <span className="w-5 shrink-0 pt-1 text-center text-xs tabular-nums text-muted-foreground sm:pt-0">
-                  {index + 1}
-                </span>
+                <div className="flex items-start gap-2.5 sm:items-center sm:gap-4">
+                  <span className="w-5 shrink-0 pt-1 text-center text-xs tabular-nums text-muted-foreground sm:pt-0">
+                    {index + 1}
+                  </span>
 
-                <a
-                  href={`https://x.com/${member.handle}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="shrink-0 pt-0.5 sm:pt-0"
-                >
-                  <Image
-                    className="shrink-0 rounded-full object-cover"
-                    src={getHighQualityXAvatarUrl({
-                      avatarUrl: member.avatarUrl,
-                      username: member.handle,
-                    })}
-                    alt={member.name}
-                    width={32}
-                    height={32}
-                    quality={100}
-                  />
-                </a>
+                  <a
+                    href={`https://x.com/${member.handle}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="shrink-0 pt-0.5 sm:pt-0"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <Image
+                      className="shrink-0 rounded-full object-cover"
+                      src={getHighQualityXAvatarUrl({
+                        avatarUrl: member.avatarUrl,
+                        username: member.handle,
+                      })}
+                      alt={member.name}
+                      width={32}
+                      height={32}
+                      quality={100}
+                    />
+                  </a>
 
-                <a
-                  href={`https://x.com/${member.handle}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="min-w-0 flex-1 transition-opacity hover:opacity-70"
-                >
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <p className="truncate text-sm font-medium text-foreground">
-                      {member.name}
+                  <a
+                    href={`https://x.com/${member.handle}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="min-w-0 flex-1 transition-opacity hover:opacity-70"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <p className="truncate text-sm font-medium text-foreground">
+                        {member.name}
+                      </p>
+                      {member.id === "you" && (
+                        <Badge variant="secondary" className="h-4 px-1.5 text-[10px]">
+                          you
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="truncate text-xs text-muted-foreground">
+                      @{member.handle}
                     </p>
-                    {member.id === "you" && (
-                      <Badge variant="secondary" className="h-4 px-1.5 text-[10px]">
-                        you
-                      </Badge>
-                    )}
-                  </div>
-                  <p className="truncate text-xs text-muted-foreground">
-                    @{member.handle}
-                  </p>
-                </a>
+                  </a>
 
-                <div className="hidden items-center gap-px sm:flex">
-                  {member.weeklyTimes.map((time, i) => {
-                    const background = getHistoryDotColor(time);
-                    return (
-                      <span
-                        key={`${member.id}-${i}`}
-                        className="group relative block"
-                      >
-                        <span
-                          className="pointer-events-none absolute bottom-full left-1/2 mb-2 -translate-x-1/2 rounded-md border border-border bg-white px-2 py-1 text-[11px] font-medium whitespace-nowrap text-foreground opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100 dark:bg-white"
-                        >
-                          {formatWakeTime(time)}
-                        </span>
-                        <span
-                          className="block size-1.5 rounded-full"
-                          style={{ background }}
-                        />
-                      </span>
-                    );
-                  })}
-                  {Array.from({
-                    length: Math.max(0, 7 - member.weeklyTimes.length),
-                  }).map((_, i) => (
-                    <span
-                      key={`${member.id}-empty-${i}`}
-                      className="group relative block"
-                    >
-                      <span
-                        className="pointer-events-none absolute bottom-full left-1/2 mb-2 -translate-x-1/2 rounded-md border border-border bg-white px-2 py-1 text-[11px] font-medium whitespace-nowrap text-foreground opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100 dark:bg-white"
-                      >
-                        No data
-                      </span>
-                      <span
-                        className="block size-1.5 rounded-full bg-muted-foreground/35"
-                      />
-                    </span>
-                  ))}
-                </div>
+                  <WeekDots member={member} expanded={false} />
 
-                <div className="shrink-0 pt-0.5 text-right sm:pt-0">
-                  <p className="text-sm tabular-nums font-medium text-foreground">
-                    {formatWakeTime(member.wakeTime)}
-                  </p>
-                  <div className="mt-0.5 flex items-center justify-end">
-                    <span className="text-[11px] tabular-nums text-muted-foreground">
-                      {member.streak}d streak
-                    </span>
+                  <div className="shrink-0 pt-0.5 text-right sm:pt-0">
+                    <p className="text-sm tabular-nums font-medium text-foreground">
+                      {formatWakeTime(member.wakeTime)}
+                    </p>
+                    <div className="mt-0.5 flex items-center justify-end">
+                      <span className="text-[11px] tabular-nums text-muted-foreground">
+                        {member.streak}d streak
+                      </span>
+                    </div>
                   </div>
                 </div>
+
+                <WeekDots member={member} expanded={isExpanded} />
               </div>
             );
           })}
