@@ -103,15 +103,7 @@ export function JoinForm() {
   );
 }
 
-function WeekDots({
-  member,
-  expanded,
-}: {
-  member: Member;
-  expanded: boolean;
-}) {
-  const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-
+function HistoryDots({ member }: { member: Member }) {
   return (
     <>
       {/* Desktop: hover tooltips */}
@@ -173,23 +165,7 @@ function WeekDots({
         ))}
       </div>
 
-      {/* Mobile: expanded time list */}
-      {expanded && (
-        <div className="col-span-full mt-1 ml-7 flex flex-wrap gap-x-3 gap-y-1 pb-1 sm:hidden">
-          {member.weeklyTimes.map((time, i) => (
-            <span
-              key={`${member.id}-detail-${i}`}
-              className="flex items-center gap-1.5 text-[11px] tabular-nums text-muted-foreground"
-            >
-              <span
-                className="inline-block size-1.5 rounded-full"
-                style={{ background: getHistoryDotColor(time) }}
-              />
-              {days[i % 7]} {formatWakeTime(time)}
-            </span>
-          ))}
-        </div>
-      )}
+      {/* Mobile: expanded time list — rendered via MobileExpandedTimes */}
     </>
   );
 }
@@ -321,7 +297,7 @@ function BoardContent() {
                     </p>
                   </a>
 
-                  <WeekDots member={member} expanded={false} />
+                  <HistoryDots member={member} />
 
                   <div className="shrink-0 pt-0.5 text-right sm:pt-0">
                     <p className="text-sm tabular-nums font-medium text-foreground">
@@ -335,7 +311,23 @@ function BoardContent() {
                   </div>
                 </div>
 
-                <WeekDots member={member} expanded={isExpanded} />
+                {isExpanded && (
+                  <div className="mt-1 ml-7 flex flex-wrap gap-x-3 gap-y-1 pb-1 sm:hidden">
+                    {member.weeklyTimes.map((time, i) => (
+                      <span
+                        key={`${member.id}-detail-${i}`}
+                        className="flex items-center gap-1.5 text-[11px] tabular-nums text-muted-foreground"
+                      >
+                        <span
+                          className="inline-block size-1.5 rounded-full"
+                          style={{ background: getHistoryDotColor(time) }}
+                        />
+                        {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][i % 7]}{" "}
+                        {formatWakeTime(time)}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
             );
           })}
