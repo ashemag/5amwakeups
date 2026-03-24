@@ -3,8 +3,8 @@ import Link from "next/link";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Terms of Service | Fiveam Club",
-  description: "Terms of service for Fiveam Club.",
+  title: "Terms of Service",
+  description: "Terms of service for The 5AM Club.",
 };
 
 export default function TermsPage() {

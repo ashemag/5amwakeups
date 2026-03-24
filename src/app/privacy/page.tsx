@@ -3,8 +3,8 @@ import Link from "next/link";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Privacy Policy | Fiveam Club",
-  description: "Privacy policy for Fiveam Club.",
+  title: "Privacy Policy",
+  description: "Privacy policy for The 5AM Club.",
 };
 
 export default function PrivacyPage() {

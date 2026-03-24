@@ -14,9 +14,46 @@ const inter = Inter({
   subsets: ["latin"],
 });
 
+const siteUrl = "https://5amwakeups.vercel.app";
+const title = "The 5AM Club — Social Leaderboard for Verified Early Risers";
+const description =
+  "A social leaderboard for the 5AM wake-up club. Connect your Oura ring, verify your wake time, and compete with friends. Open source.";
+
 export const metadata: Metadata = {
-  title: "Fiveam Club",
-  description: "An elegant social leaderboard for verified 5am wakeups.",
+  title: {
+    default: title,
+    template: "%s | The 5AM Club",
+  },
+  description,
+  metadataBase: new URL(siteUrl),
+  alternates: {
+    canonical: "/",
+  },
+  openGraph: {
+    type: "website",
+    locale: "en_US",
+    url: siteUrl,
+    siteName: "The 5AM Club",
+    title,
+    description,
+  },
+  twitter: {
+    card: "summary_large_image",
+    title,
+    description,
+    creator: "@ashebytes",
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-video-preview": -1,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+    },
+  },
 };
 
 /**
