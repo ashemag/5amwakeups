@@ -3,6 +3,11 @@ import { env } from "@/lib/env";
 import { exchangeCodeForTokens, fetchOuraPersonalInfo } from "@/lib/oura";
 import { upsertStoredMember } from "@/lib/member-store";
 import { syncOuraSleepHistory } from "@/lib/oura-sync";
+import { notifyError } from "@/lib/slack/notify";
+import {
+  notifyOuraConnected,
+  notifySleepSynced,
+} from "@/lib/slack/product-events";
 
 type OnboardingCookie = {
   avatarUrl?: string;
@@ -120,6 +125,8 @@ export async function GET(request: NextRequest) {
       grantedScopes: resolvedScopes,
     });
 
+    void notifyOuraConnected(cleanHandle, onboarding.name?.trim());
+
     after(async () => {
       try {
         const syncResult = await syncOuraSleepHistory({
@@ -138,8 +145,19 @@ export async function GET(request: NextRequest) {
           importedDays: syncResult.importedDays,
           hasSleepData: syncResult.hasSleepData,
         });
+
+        void notifySleepSynced(
+          cleanHandle,
+          syncResult.importedDays,
+          onboarding.name?.trim(),
+        );
       } catch (syncError) {
         console.error("Oura sleep history sync failed", syncError);
+        void notifyError(
+          "/api/auth/oura/callback (sync)",
+          `Sleep sync failed for @${cleanHandle}`,
+          syncError instanceof Error ? syncError.message : undefined,
+        );
       }
     });
 
@@ -156,6 +174,11 @@ export async function GET(request: NextRequest) {
     return response;
   } catch (caughtError) {
     console.error("Oura callback failed", caughtError);
+    void notifyError(
+      "/api/auth/oura/callback",
+      `Oura callback failed for @${cleanHandle}`,
+      caughtError instanceof Error ? caughtError.message : undefined,
+    );
 
     const auth = "sync_failed";
     const detail =

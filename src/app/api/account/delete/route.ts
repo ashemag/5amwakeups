@@ -4,6 +4,8 @@ import {
   createSupabaseAdminClient,
   createSupabaseServerAuthClient,
 } from "@/lib/supabase";
+import { notifyError } from "@/lib/slack/notify";
+import { notifyAccountDeleted } from "@/lib/slack/product-events";
 
 export async function POST(request: NextRequest) {
   try {
@@ -67,9 +69,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    void notifyAccountDeleted(handle);
+
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Account deletion failed", error);
+    void notifyError(
+      "/api/account/delete",
+      "Account deletion failed",
+      error instanceof Error ? error.message : undefined,
+    );
     return NextResponse.json(
       { error: "Unable to delete account right now." },
       { status: 500 },
