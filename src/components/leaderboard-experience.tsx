@@ -2,9 +2,11 @@
 
 import Image from "next/image";
 import { Suspense, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useXAuth } from "@/components/x-auth-provider";
+import { useMemberStatus } from "@/lib/use-member-status";
 import { getHighQualityXAvatarUrl } from "@/lib/x-avatar";
 import {
   formatWakeTime,
@@ -41,8 +43,18 @@ function getHistoryDotColor(time: string) {
 }
 
 function JoinFormContent() {
+  const router = useRouter();
   const [connectError, setConnectError] = useState("");
   const { isAuthenticating, isLoading, profile, signInWithX } = useXAuth();
+  const { isConnected, hasLoadedMembers } = useMemberStatus(
+    profile?.username,
+  );
+
+  useEffect(() => {
+    if (profile && hasLoadedMembers && !isConnected) {
+      router.push("/connect-oura");
+    }
+  }, [profile, hasLoadedMembers, isConnected, router]);
 
   if (profile) {
     return (
