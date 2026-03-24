@@ -97,6 +97,14 @@ export function OuraOnboardingFlow() {
     }
   }, [isLoading, profile, router]);
 
+  // If Oura is already connected and the user didn't just finish the OAuth
+  // flow, skip the onboarding page and go straight to the leaderboard.
+  useEffect(() => {
+    if (profile && isConnected && !authState) {
+      router.replace("/");
+    }
+  }, [profile, isConnected, authState, router]);
+
   useEffect(() => {
     if (!authState) {
       return;
