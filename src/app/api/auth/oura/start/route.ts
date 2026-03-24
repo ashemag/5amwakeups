@@ -2,6 +2,12 @@ import { randomBytes } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { env } from "@/lib/env";
 import { buildOuraAuthorizeUrl } from "@/lib/oura";
+import { getConnectedMemberCount, isHandleAlreadyConnected } from "@/lib/member-store";
+import { addToWaitlist } from "@/lib/waitlist";
+import { getHighQualityXAvatarUrl } from "@/lib/x-avatar";
+import { notifyWaitlisted } from "@/lib/slack/product-events";
+
+const OURA_MAX_USERS = 10;
 
 export async function GET(request: NextRequest) {
   const avatarUrl = request.nextUrl.searchParams.get("avatar_url")?.trim() ?? "";
@@ -12,6 +18,27 @@ export async function GET(request: NextRequest) {
 
   if (!handle) {
     return NextResponse.redirect(new URL("/?auth=missing_handle", env.appUrl));
+  }
+
+  // Allow reconnects for existing members, but block new connections at capacity
+  const alreadyConnected = await isHandleAlreadyConnected(handle);
+
+  if (!alreadyConnected) {
+    const count = await getConnectedMemberCount();
+
+    if (count >= OURA_MAX_USERS) {
+      await addToWaitlist({
+        twitterHandle: handle,
+        displayName: name || handle,
+        avatarUrl: getHighQualityXAvatarUrl({ avatarUrl, username: handle }),
+      });
+
+      void notifyWaitlisted(handle, name || handle);
+
+      const redirectUrl = new URL(nextPath.startsWith("/") ? nextPath : "/", env.appUrl);
+      redirectUrl.searchParams.set("auth", "waitlisted");
+      return NextResponse.redirect(redirectUrl);
+    }
   }
 
   const state = randomBytes(24).toString("hex");

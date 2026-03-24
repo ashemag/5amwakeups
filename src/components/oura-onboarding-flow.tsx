@@ -19,6 +19,8 @@ const authMessages: Record<string, string> = {
     "Oura connected, but no completed sleep summary is available yet.",
   oura_error: "Oura rejected the request.",
   sync_failed: "Sync error. Please try again.",
+  waitlisted:
+    "We're at capacity for Oura connections right now (pending Oura's approval for more slots). You've been added to the waitlist — we'll ping you when a spot opens up!",
 };
 
 function StepIcon({

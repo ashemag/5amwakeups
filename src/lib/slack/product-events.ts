@@ -38,6 +38,16 @@ export async function notifySleepSynced(
   );
 }
 
+export async function notifyWaitlisted(
+  handle: string,
+  name?: string | null,
+): Promise<boolean> {
+  const displayName = clean(name, 80) || `@${clean(handle, 40)}`;
+  return notifySlack(
+    `\u{23f3} *Added to waitlist*\nUser: ${displayName} (@${clean(handle, 40)})\nOura user limit reached. Needs approval for more slots.`,
+  );
+}
+
 export async function notifyAccountDeleted(
   handle: string,
 ): Promise<boolean> {

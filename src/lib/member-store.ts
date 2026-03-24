@@ -165,6 +165,39 @@ function mapRowToMember(row: MemberRow): Member {
   };
 }
 
+export async function getConnectedMemberCount() {
+  const supabase = createSupabaseAdminClient();
+  const { count, error } = await supabase
+    .from("fiveam_members")
+    .select("id", { count: "exact", head: true });
+
+  if (error) {
+    throw error;
+  }
+
+  return count ?? 0;
+}
+
+export async function isHandleAlreadyConnected(handle: string) {
+  const normalizedHandle = normalizeHandle(handle);
+
+  if (!normalizedHandle) {
+    return false;
+  }
+
+  const supabase = createSupabaseAdminClient();
+  const { count, error } = await supabase
+    .from("fiveam_members")
+    .select("id", { count: "exact", head: true })
+    .eq("twitter_handle", normalizedHandle);
+
+  if (error) {
+    return false;
+  }
+
+  return (count ?? 0) > 0;
+}
+
 export async function listStoredMembers() {
   const supabase = createSupabaseAdminClient();
   const { data, error } = await supabase
