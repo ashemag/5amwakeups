@@ -309,30 +309,6 @@ export function OuraOnboardingFlow() {
             )}
           </div>
 
-          {/* Step 3: View leaderboard (only shown before Oura is connected) */}
-          {!ouraConnected && (
-            <div className="rounded-xl border border-border bg-card">
-              <button
-                type="button"
-                onClick={() => toggleStep(2)}
-                className="flex w-full items-center gap-3 px-3 py-3.5 text-left sm:px-4"
-              >
-                <StepIcon state="pending" />
-                <span className="flex-1 text-[14px] font-medium text-foreground">
-                  View the leaderboard
-                </span>
-                <ChevronIcon open={openStep === 2} />
-              </button>
-
-              {openStep === 2 && (
-                <div className="px-3 pb-4 pt-0 sm:px-4">
-                  <p className="font-sans text-[13px] leading-relaxed text-muted-foreground">
-                    Complete the steps above to join the leaderboard.
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
         </div>
 
         {/* Footer */}
