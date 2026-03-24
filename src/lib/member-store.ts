@@ -165,6 +165,68 @@ function mapRowToMember(row: MemberRow): Member {
   };
 }
 
+export type SyncableMember = {
+  id: string;
+  accessToken: string;
+  refreshToken: string;
+  tokenExpiresAt: string | null;
+  twitterHandle: string;
+  displayName: string;
+  email: string | null;
+  avatarUrl: string;
+  ouraUserId: string;
+  scopes: string[];
+};
+
+export async function getAllMembersForSync(): Promise<SyncableMember[]> {
+  const supabase = createSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("fiveam_members")
+    .select("*")
+    .order("updated_at", { ascending: true });
+
+  if (error) {
+    throw error;
+  }
+
+  const rows = (data ?? []) as MemberRow[];
+
+  return rows.map((row) => ({
+    id: row.id,
+    accessToken: row.access_token,
+    refreshToken: row.refresh_token,
+    tokenExpiresAt: row.token_expires_at,
+    twitterHandle: row.twitter_handle,
+    displayName: row.display_name,
+    email: row.email,
+    avatarUrl: row.avatar_url,
+    ouraUserId: row.oura_user_id,
+    scopes: row.scopes ?? [],
+  }));
+}
+
+export async function updateMemberTokens(
+  id: string,
+  accessToken: string,
+  refreshToken: string,
+  tokenExpiresAt: string,
+) {
+  const supabase = createSupabaseAdminClient();
+  const { error } = await supabase
+    .from("fiveam_members")
+    .update({
+      access_token: accessToken,
+      refresh_token: refreshToken,
+      token_expires_at: tokenExpiresAt,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id);
+
+  if (error) {
+    throw error;
+  }
+}
+
 export async function getConnectedMemberCount() {
   const supabase = createSupabaseAdminClient();
   const { count, error } = await supabase

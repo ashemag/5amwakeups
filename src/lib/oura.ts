@@ -122,6 +122,26 @@ export async function exchangeCodeForTokens(code: string) {
   return parseJson<OuraTokenResponse>(response);
 }
 
+export async function refreshOuraTokens(refreshToken: string) {
+  const body = new URLSearchParams({
+    grant_type: "refresh_token",
+    refresh_token: refreshToken,
+    client_id: env.ouraClientId,
+    client_secret: env.ouraClientSecret,
+  });
+
+  const response = await fetch(OURA_TOKEN_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body,
+    cache: "no-store",
+  });
+
+  return parseJson<OuraTokenResponse>(response);
+}
+
 export async function fetchOuraPersonalInfo(accessToken: string) {
   const response = await fetch(OURA_PERSONAL_INFO_URL, {
     headers: {
