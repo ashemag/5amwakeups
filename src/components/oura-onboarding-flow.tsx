@@ -91,19 +91,14 @@ export function OuraOnboardingFlow() {
   const authDetail = searchParams.get("auth_detail")?.trim() ?? "";
   const [connectError, setConnectError] = useState("");
 
-  useEffect(() => {
-    if (!isLoading && !profile) {
-      router.replace("/");
-    }
-  }, [isLoading, profile, router]);
+  const shouldRedirectHome =
+    (!isLoading && !profile) || (profile && isConnected && !authState);
 
-  // If Oura is already connected and the user didn't just finish the OAuth
-  // flow, skip the onboarding page and go straight to the leaderboard.
   useEffect(() => {
-    if (profile && isConnected && !authState) {
+    if (shouldRedirectHome) {
       router.replace("/");
     }
-  }, [profile, isConnected, authState, router]);
+  }, [shouldRedirectHome, router]);
 
   useEffect(() => {
     if (!authState) {
@@ -155,17 +150,10 @@ export function OuraOnboardingFlow() {
     setOpenStep(openStep === step ? null : step);
   };
 
-  if (!isLoading && !profile) {
-    return (
-      <div className="w-full max-w-lg rounded-2xl border border-border bg-card px-4 py-5 shadow-[0_2px_20px_rgba(0,0,0,0.04)] sm:px-6 sm:py-6 dark:shadow-none">
-        <p className="text-lg font-semibold tracking-[-0.01em] text-foreground">
-          Redirecting home.
-        </p>
-        <p className="mt-1 font-sans text-[14px] text-muted-foreground">
-          Connect Oura is only available for signed-in users.
-        </p>
-      </div>
-    );
+  // Don't render anything while loading or while redirecting away — this
+  // prevents the onboarding card from flashing on screen.
+  if (isLoading || shouldRedirectHome) {
+    return null;
   }
 
   const activeProfile = profile;
